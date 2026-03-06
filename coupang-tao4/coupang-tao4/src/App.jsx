@@ -1,15 +1,20 @@
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAxJJBXOIi1q9kG-1YET9hqM9aERDiTlWg",
+  authDomain: "coupang-tao4.firebaseapp.com",
+  projectId: "coupang-tao4",
+  storageBucket: "coupang-tao4.firebasestorage.app",
+  messagingSenderId: "52503781870",
+  appId: "1:1:52503781870:web:fb3ef8d7eed4d5d8f92eff",
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-
-// ─── Storage helpers (localStorage for Vercel) ───────────────────────────────
-const storage = {
-  get: (key) => {
-    try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
-  },
-  set: (key, value) => {
-    try { localStorage.setItem(key, value); return true; } catch { return false; }
-  },
-};
 
 // ─── Default page content ───────────────────────────────────────────────────
 const DEFAULT_PAGES = {
@@ -844,18 +849,19 @@ export default function App() {
   const fileInputRef = useRef(null);
   const imgRefs = useRef({});
 
-  // Load from storage
+  // Load from shared storage
   useEffect(() => {
     setDataLoading(true);
-    try {
-      const pd = storage.get("tao4_pages");
-      if (pd) setPages(JSON.parse(pd.value));
-    } catch {}
-    try {
-      const ed = storage.get("tao4_employees");
-      if (ed) setEmployees(JSON.parse(ed.value));
-    } catch {}
-    setDataLoading(false);
+    // Real-time listener for pages
+    const unsubPages = onSnapshot(doc(db, "tao4", "pages"), (snap) => {
+      if (snap.exists()) setPages(snap.data().value);
+      setDataLoading(false);
+    }, () => setDataLoading(false));
+    // Real-time listener for employees
+    const unsubEmps = onSnapshot(doc(db, "tao4", "employees"), (snap) => {
+      if (snap.exists()) setEmployees(snap.data().value);
+    });
+    return () => { unsubPages(); unsubEmps(); };
   }, []);
 
   const showToast = (msg) => {
@@ -863,14 +869,14 @@ export default function App() {
     setTimeout(() => setToast(""), 2500);
   };
 
-  const savePages = (newPages) => {
+  const savePages = async (newPages) => {
     setPages(newPages);
-    try { storage.set("tao4_pages", JSON.stringify(newPages)); } catch {}
+    try { await setDoc(doc(db, "tao4", "pages"), { value: newPages }); } catch(e) { console.error(e); }
   };
 
-  const saveEmployees = (newEmps) => {
+  const saveEmployees = async (newEmps) => {
     setEmployees(newEmps);
-    try { storage.set("tao4_employees", JSON.stringify(newEmps)); } catch {}
+    try { await setDoc(doc(db, "tao4", "employees"), { value: newEmps }); } catch(e) { console.error(e); }
   };
 
   const handleLogin = () => {
@@ -1048,6 +1054,7 @@ export default function App() {
           </div>
           <div className="header-right">
             <span className="header-emp">👤 {empId}</span>
+            <span style={{ fontSize: 11, color: "var(--green)", background: "#dcfce7", padding: "4px 10px", borderRadius: 20, fontWeight: 600 }}>🔄 雲端同步</span>
             {isAdmin && (
               <button className="header-btn btn-admin" onClick={() => setView("admin")}>
                 ⚙️ 後台管理
