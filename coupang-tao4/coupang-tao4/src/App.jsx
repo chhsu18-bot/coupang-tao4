@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 // Firebase config
 const firebaseConfig = {
@@ -12,6 +13,7 @@ const firebaseConfig = {
 };
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+const auth = getAuth(firebaseApp);
 
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
@@ -851,17 +853,18 @@ export default function App() {
 
   // Load from shared storage
   useEffect(() => {
+    // Sign in anonymously first, then start listeners
     setDataLoading(true);
-    // Real-time listener for pages
-    const unsubPages = onSnapshot(doc(db, "tao4", "pages"), (snap) => {
-      if (snap.exists()) setPages(snap.data().value);
-      setDataLoading(false);
-    }, () => setDataLoading(false));
-    // Real-time listener for employees
-    const unsubEmps = onSnapshot(doc(db, "tao4", "employees"), (snap) => {
-      if (snap.exists()) setEmployees(snap.data().value);
-    });
-    return () => { unsubPages(); unsubEmps(); };
+    signInAnonymously(auth).then(() => {
+      const unsubPages = onSnapshot(doc(db, "tao4", "pages"), (snap) => {
+        if (snap.exists()) setPages(snap.data().value);
+        setDataLoading(false);
+      }, () => setDataLoading(false));
+      const unsubEmps = onSnapshot(doc(db, "tao4", "employees"), (snap) => {
+        if (snap.exists()) setEmployees(snap.data().value);
+      });
+      return () => { unsubPages(); unsubEmps(); };
+    }).catch(() => setDataLoading(false));
   }, []);
 
   const showToast = (msg) => {
